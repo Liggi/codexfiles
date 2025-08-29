@@ -1,0 +1,91 @@
+#!/usr/bin/env python3
+
+import sys, json, time, argparse
+from openai import OpenAI
+
+client = OpenAI()
+
+def search_with_gpt4o(query, max_links=6):
+    for attempt in range(3):
+        try:
+            response = client.chat.completions.create(
+                model="gpt-4o-search-preview",
+                max_tokens=2048,
+                messages=[
+                    {"role": "system", "content": "You MUST return ONLY valid JSON in this exact format: {\"items\":[{\"url\":\"actual_url\",\"title\":\"actual_title\",\"date\":\"actual_date\",\"note\":\"brief_note\"}]}. No other text before or after."},
+                    {"role": "user", "content": f"Search for {max_links} sources about: {query}"}
+                ]
+            )
+            text = response.choices[0].message.content
+            try:
+                data = json.loads(text)
+                return data.get("items", [])[:max_links]
+            except json.JSONDecodeError:
+                start = text.find("{")
+                end = text.rfind("}")
+                if start >= 0 and end > start:
+                    try:
+                        return json.loads(text[start:end+1]).get("items", [])[:max_links]
+                    except Exception:
+                        pass
+                return []
+        except Exception as e:
+            if "rate" in str(e).lower():
+                time.sleep((2 ** attempt) * 2)
+                continue
+            return []
+    return []
+
+def synthesize_with_gpt5(query, items, long_mode=False):
+    if not items:
+        return "No sources found."
+    sources = "\n".join([
+        f"- {item.get('title', 'Unknown')} ({item.get('url', 'no-url')}) - {item.get('note', '')}"
+        for item in items
+    ])
+    cap = 16384 if long_mode else 8192
+    for attempt in range(3):
+        try:
+            with client.responses.stream(
+                model="gpt-5",
+                max_output_tokens=cap,
+                reasoning={"effort": "medium"},
+                input=[
+                    {"role": "system", "content": "Write summaries citing only provided sources."},
+                    {"role": "user", "content": f"Query: {query}\n\nSources:\n{sources}\n\nWrite a summary with key points and citations."}
+                ]
+            ) as stream:
+                chunks = []
+                for event in stream:
+                    if event.type == "response.output_text.delta":
+                        chunks.append(event.delta)
+                final = stream.get_final_response()
+                return "".join(chunks) or getattr(final, "output_text", "")
+        except Exception as e:
+            if "rate" in str(e).lower():
+                time.sleep((2 ** attempt) * 3)
+                continue
+            return f"Error: {e}"
+    return "Synthesis failed."
+
+def main():
+    parser = argparse.ArgumentParser(description="GPT-5 search+summarize helper")
+    parser.add_argument("query")
+    parser.add_argument("--long", action="store_true")
+    parser.add_argument("--links", type=int, default=6)
+    parser.add_argument("--dry", action="store_true")
+    args = parser.parse_args()
+
+    items = search_with_gpt4o(args.query, args.links)
+    if args.dry:
+        print(json.dumps({"query": args.query, "items": items}, indent=2))
+        return
+    if not items:
+        print("No sources found.")
+        return
+    result = synthesize_with_gpt5(args.query, items, args.long)
+    print(result)
+
+if __name__ == "__main__":
+    main()
+

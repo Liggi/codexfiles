@@ -1,0 +1,28 @@
+profile = "default"
+
+# High‑reasoning default
+model = "gpt-5"
+model_provider = "openai"
+model_reasoning_effort = "high"     # low | medium | high
+model_verbosity = "medium"          # final answer verbosity (low | medium | high)
+model_reasoning_summary = "detailed" # transcript summaries (auto | detailed)
+
+# Optional: Profiles you can switch with `codex -p fast` (etc.)
+[profiles.default]
+model = "gpt-5"
+model_provider = "openai"
+model_reasoning_effort = "high"
+model_verbosity = "medium"
+model_reasoning_summary = "detailed"
+
+[profiles.fast]
+model = "gpt-5-mini"
+model_provider = "openai"
+model_reasoning_effort = "low"
+model_verbosity = "low"
+
+# Example MCP server (disabled unless you keep it)
+[mcp_servers.docs]
+command = "npx"
+args    = ["-y", "mcp-remote", "https://learn.microsoft.com/api/mcp"]
+

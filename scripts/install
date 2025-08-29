@@ -1,0 +1,62 @@
+#!/bin/bash
+
+set -euo pipefail
+
+CODEXFILES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")"/.. && pwd)"
+CODEX_DIR="$HOME/.codex"
+BACKUP_DIR="$HOME/.codex.backup.$(date +%Y%m%d_%H%M%S)"
+
+echo "🤖 Setting up codexfiles..."
+
+# Ensure ~/.codex exists (we only link specific files, not the whole dir)
+mkdir -p "$CODEX_DIR"
+
+# Backup and replace helper for individual files
+backup_and_link() {
+  local src="$1"       # absolute source path
+  local dst="$2"       # absolute destination path
+  local name
+  name="$(basename "$dst")"
+
+  if [[ -e "$dst" && ! -L "$dst" ]]; then
+    echo "📦 Backing up existing $dst to $BACKUP_DIR/$name"
+    mkdir -p "$BACKUP_DIR"
+    mv "$dst" "$BACKUP_DIR/$name"
+  elif [[ -L "$dst" ]]; then
+    echo "🗑️  Removing existing symlink $dst"
+    rm -f "$dst"
+  fi
+
+  echo "🔗 Linking $src → $dst"
+  ln -s "$src" "$dst"
+}
+
+# Link config.toml and AGENTS.md into ~/.codex
+backup_and_link "$CODEXFILES_DIR/config/config.toml" "$CODEX_DIR/config.toml"
+backup_and_link "$CODEXFILES_DIR/AGENTS.md" "$CODEX_DIR/AGENTS.md"
+
+# Ensure artifact directories exist
+mkdir -p "$CODEXFILES_DIR/codebase-reports" "$CODEXFILES_DIR/code-search"
+
+# Make helper scripts executable
+chmod +x "$CODEXFILES_DIR/bin"/* 2>/dev/null || true
+
+# Add codexfiles/bin to PATH if missing
+SHELL_RC=""
+if [[ "${SHELL:-}" == */zsh ]]; then
+  SHELL_RC="$HOME/.zshrc"
+elif [[ "${SHELL:-}" == */bash ]]; then
+  SHELL_RC="$HOME/.bashrc"
+fi
+
+if [[ -n "$SHELL_RC" ]]; then
+  if ! grep -q 'codexfiles.*bin' "$SHELL_RC" 2>/dev/null; then
+    echo "🔗 Adding codexfiles/bin to PATH in $SHELL_RC"
+    echo 'export PATH="$HOME/codexfiles/bin:$PATH"' >> "$SHELL_RC"
+  fi
+fi
+
+echo "✅ codexfiles installed. Defaults: model=gpt-5, reasoning=high"
+echo "Next: restart your shell or 'source $SHELL_RC' (if set)."
+echo "Switch quickly with profiles: 'codex -p fast' (gpt-5-mini)."
+
