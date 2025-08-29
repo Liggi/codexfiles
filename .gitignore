@@ -1,0 +1,16 @@
+# OS
+.DS_Store
+
+# Editor swaps
+*.swp
+*.swo
+
+# Python (for bin/gpt5-search)
+__pycache__/
+*.py[cod]
+
+# Local artifacts (keep .gitkeep only)
+code-search/*
+!code-search/.gitkeep
+codebase-reports/*
+!codebase-reports/.gitkeep
